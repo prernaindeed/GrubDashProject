@@ -8,94 +8,10 @@ const nextId = require("../utils/nextId");
 
 // TODO: Implement the /orders handlers needed to make the tests pass
 
-function create(req, res, next) {
-  const { data: { deliverTo, mobileNumber, status, dishes } = {} } = req.body;
 
-  // Validation
-  if (!deliverTo || deliverTo === "") {
-    return next({
-      status: 400,
-      message: "Order must include a deliverTo",
-    });
-  }
-
-  if (!mobileNumber || mobileNumber === "") {
-    return next({
-      status: 400,
-      message: "Order must include a mobileNumber",
-    });
-  }
-
-  if (!Array.isArray(dishes) || dishes.length === 0) {
-    return next({
-      status: 400,
-      message: "Order must include at least one dish",
-    });
-  }
-
-  dishes.forEach((dish, index) => {
-    if (!dish.quantity || dish.quantity <= 0 || !Number.isInteger(dish.quantity)) {
-      return next({
-        status: 400,
-        message: `Dish ${index} must have a quantity that is an integer greater than 0`,
-      });
-    }
-  });
-
-  const newOrder = {
-    id: nextId(),
-    deliverTo,
-    mobileNumber,
-    status,
-    dishes,
-  };
-
-  orders.push(newOrder);
-  res.status(201).json({ data: newOrder });
-}
-
-function read(req, res, next) {
-  const { orderId } = req.params;
-  const orderIndex = orders.findIndex((o) => o.id === orderId);
-
-  if (orderIndex !== -1) {
-    const order = orders[orderIndex];
-    res.status(200).json({ data: order });
-  } else {
-    next({
-      status: 404,
-      message: `Order not found: ${orderId}`,
-    });
-  }
-}
-
-
-function update(req, res, next) {
-  const { orderId } = req.params;
-  const { data: { id, deliverTo, mobileNumber, status, dishes } = {} } = req.body;
-  let isIncorrectQuantity = false
-  // Check if the order with the specified ID exists
-  const existingOrder = orders.find((order) => order.id === orderId);
-  if (!existingOrder) {
-    return next({
-      status: 404,
-      message: `Order with ID ${orderId} not found`,
-    });
-  }
-
-  if (id && id !== orderId) {
-    return next({
-      status: 400,
-      message: `Order id does not match route id. Order: ${id}, Route: ${req.params.orderId}`,
-    });
-  }
-  // Validation logic...
-  if (!status || status !== existingOrder.status) {
-    return next({
-      status: 400,
-      message: "Order status cannot be changed",
-    });
-  }
+function validateOrderInput(req, res, next){
+  const { data: { deliverTo, mobileNumber, dishes } = {} } = req.body;
+  
   if (!deliverTo || deliverTo === "") {
     return next({
       status: 400,
@@ -127,8 +43,65 @@ function update(req, res, next) {
       }
     });
   }
-  
+  next()
+}
 
+
+function create(req, res, next) {
+  const { data: { deliverTo, mobileNumber, status, dishes } = {} } = req.body;
+
+  const newOrder = {
+    id: nextId(),
+    deliverTo,
+    mobileNumber,
+    status,
+    dishes,
+  };
+
+  orders.push(newOrder);
+  res.status(201).json({ data: newOrder });
+}
+
+function orderExists(req, res, next){
+  const { orderId } = req.params;
+  const orderIndex = orders.findIndex((o) => o.id === orderId);
+
+  if (orderIndex === -1) {
+    next({
+      status: 404,
+      message: `Order not found: ${orderId}`,
+    });
+  }
+  
+  const order = orders[orderIndex];
+  res.locals.data = order
+  next()
+}
+
+function read(req, res, next) {
+  res.send(res.locals)
+}
+
+function update(req, res, next) {
+  const { orderId } = req.params;
+  const { data: { id, deliverTo, mobileNumber, status, dishes } = {} } = req.body;
+  let isIncorrectQuantity = false
+  const existingOrder = res.locals.data
+  
+  if (id && id !== orderId) {
+    return next({
+      status: 400,
+      message: `Order id does not match route id. Order: ${id}, Route: ${req.params.orderId}`,
+    });
+  }
+  // Validation logic...
+  if (!status || status !== existingOrder.status) {
+    return next({
+      status: 400,
+      message: "Order status cannot be changed",
+    });
+  }
+  
   if (existingOrder && !isIncorrectQuantity) {
     // Update the existing order
     existingOrder.deliverTo = deliverTo;
@@ -141,10 +114,6 @@ function update(req, res, next) {
   }
   
 }
-
-
-
-
 
 function remove(req, res, next) {
   const { orderId } = req.params;
@@ -171,16 +140,14 @@ function remove(req, res, next) {
   }
 }
 
-
-
 function list(req, res, next) {
   res.json({ data: orders });
 }
 
 module.exports = {
-  create,
-  read,
-  update,
+  create: [validateOrderInput, create],
+  read: [orderExists, read],
+  update: [orderExists, validateOrderInput, update],
   remove,
   list,
 };

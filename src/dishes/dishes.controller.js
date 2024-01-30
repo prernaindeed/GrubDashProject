@@ -9,9 +9,8 @@ const nextId = require("../utils/nextId");
 
 // TODO: Implement the /dishes handlers needed to make the tests pass
 
-function create(req, res, next) {
+function validateDishInput (req, res, next) {
   const { data: { name, description, price, image_url } = {} } = req.body;
-
   // Validation
   if (!name || name === "") {
     return next({
@@ -40,7 +39,13 @@ function create(req, res, next) {
       message: "Dish must include an image_url",
     });
   }
+  next()
+}
 
+function create(req, res, next) {
+  const { data: { name, description, price, image_url } = {} } = req.body;
+
+  
   const newDish = {
     id: nextId(),
     name,
@@ -53,33 +58,30 @@ function create(req, res, next) {
   res.status(201).json({ data: newDish });
 }
 
-function read(req, res, next) {
+function dishExists(req, res, next) {
   const { dishId } = req.params;
   const dishIndex = dishes.findIndex((o) => o.id === dishId);
-
-  if (dishIndex !== -1) {
-    const dish = dishes[dishIndex];
-    res.status(200).json({ data: dish });
-  } else {
+  
+  if (dishIndex === -1) {
     next({
       status: 404,
       message: `Dish not found: ${dishId}`,
     });
-  }
+  } 
+  const dish = dishes[dishIndex];
+  res.locals.data = dish
+  next()
+}
+
+function read(req, res, next) {
+  res.send(res.locals)
 }
 
 function update(req, res, next) {
   const { data: { id, name, description, price, image_url } = {} } = req.body;
-  // Validation
   const { dishId } = req.params;
-  const dishIndex = dishes.findIndex((d) => d.id === dishId);
-  if(dishIndex == -1) {
-    next({
-      status: 404,
-      message: `Dish not found: ${dishId}`,
-    });
-  }
-
+  
+  // Validation
   if (id && id !== dishId) {
     return next({
       status: 400,
@@ -87,57 +89,23 @@ function update(req, res, next) {
     });
   }
 
-  if (!name || name === "") {
-    return next({
-      status: 400,
-      message: "Dish must include a name",
-    });
-  }
   
+  res.locals.data.name = name;
+  res.locals.data.description = description;
+  res.locals.data.price = price;
+  res.locals.data.image_url = image_url;
 
-  if (!description || description === "") {
-    return next({
-      status: 400,
-      message: "Dish must include a description",
-    });
-  }
-
-  if (!price || price <= 0 || !Number.isInteger(price)) {
-    return next({
-      status: 400,
-      message: "Dish must have a price that is an integer greater than 0",
-    });
-  }
-
-  if (!image_url || image_url === "") {
-    return next({
-      status: 400,
-      message: "Dish must include an image_url",
-    });
-  }
-  
-  if (dishIndex !== -1) {
-    let dish = dishes[dishIndex];
-    dish.name = name;
-    dish.description = description;
-    dish.price = price;
-    dish.image_url = image_url;
-
-    res.json({ data: dish });
-  } 
-  
-
-
+  res.send(res.locals)
 }
 
 function list(req, res, next) {
-  res.json({ data: dishes });
+  res.send({data: dishes})
 }
 
 module.exports = {
-  create: [create],
-  read: [read],
-  update: [update],
+  create: [validateDishInput, create],
+  read: [dishExists, read],
+  update: [dishExists, validateDishInput, update],
   list,
 };
 
